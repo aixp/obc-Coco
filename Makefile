@@ -44,4 +44,4 @@ Sets.k: Texts.k
 	obc -c ${.IMPSRC}
 
 clean:
-	rm -f CRP.m CRS.m *.k CocoCompile *.tmp *.core
+	rm -f CRP.m CRS.m Coco.m *.k CocoCompile *.tmp *.core
