@@ -1,4 +1,4 @@
-COMPILER CR  (*H.Moessenboeck 17.11.93, Coco/R*)
+COMPILER CR  (*H.Moessenboeck 17.11.93, Coco/R*) (* A. V. Shiryaev, 2012.01 *)
 
 (*---------------------- semantic declarations ----------------------------*)
 
@@ -6,23 +6,26 @@ IMPORT CRT, CRA, CRX, Sets, Texts, Oberon;
 
 CONST
   ident = 0; string = 1; (*symbol kind*)
-  
+
+  noString = "-none-"; (* used in declarations of literal tokens *)
+
 VAR 
   str: ARRAY 32 OF CHAR;
   w:   Texts.Writer;
   genScanner: BOOLEAN;
 
+  tokenString: CRT.Name; (* used in declarations of literal tokens *)
 
 PROCEDURE SemErr(nr: INTEGER);
 BEGIN
   CRS.Error(200+nr, CRS.pos);
 END SemErr;
 
-PROCEDURE MatchLiteral(sp: INTEGER); (*store string either as token or as literal*)
+PROCEDURE MatchLiteral(CONST name: ARRAY OF CHAR; sp: INTEGER); (*store string either as token or as literal*)
   VAR sn, sn1: CRT.SymbolNode; matchedSp: INTEGER;
 BEGIN
   CRT.GetSym(sp, sn);
-  CRA.MatchDFA(sn.name, sp, matchedSp);
+  CRA.MatchDFA((*sn.name*) name, sp, matchedSp);
   IF matchedSp # CRT.noSym THEN
     CRT.GetSym(matchedSp, sn1); sn1.struct := CRT.classLitToken; CRT.PutSym(matchedSp, sn1);
     sn.struct := CRT.litToken
@@ -159,7 +162,7 @@ CR                              (. VAR undef, hasAttrs, ok, ok1: BOOLEAN; eofSy,
                                        CRT.TestIfAllNtReached(ok1); CRT.FindCircularProductions(ok)
                                      END;
                                      IF ok THEN CRT.TestIfNtToTerm(ok) END;
-                                     IF ok THEN CRT.LL1Test(ok1) END;
+                                     IF ok THEN CRT.TestResolvers(ok1); CRT.LL1Test(ok1) END;
                                      IF CRT.ddt[0] THEN CRA.PrintStates END;
                                      IF CRT.ddt[7] THEN CRT.XRef END;
                                      IF ok THEN
@@ -243,13 +246,22 @@ TokenDecl <typ: INTEGER>        (. VAR sp, kind, gL, gR: INTEGER; sn: CRT.Symbol
                                      sp := CRT.NewSym(typ, name, CRS.line);
                                      CRT.GetSym(sp, sn); sn.struct := CRT.classToken;
                                      CRT.PutSym(sp, sn)
-                                   END .)
+                                   END;
+                                   tokenString := "" .)
   SYNC
   ( "=" TokenExpr <gL, gR> "."  (. IF kind # ident THEN SemErr(13) END;
                                    CRT.CompleteGraph(gR);
-                                   CRA.ConvertToStates(gL, sp) .)
+                                   IF (tokenString = "") OR (tokenString = noString) THEN
+                                     CRA.ConvertToStates(gL, sp)
+                                   ELSE (* TokenExpr is a single string *)
+                                     IF CRT.FindLit(tokenString) # CRT.noSym THEN
+                                       SemErr(27) (* token string declared twice *)
+                                     END;
+                                     CRT.NewLit(tokenString, sp);
+                                     MatchLiteral(tokenString, sp)
+                                   END .)
   |                             (. IF kind = ident THEN genScanner := FALSE
-                                   ELSE MatchLiteral(sp)
+                                   ELSE MatchLiteral(name, sp)
                                    END .)
   )
   [ SemText <pos>               (. IF typ = CRT.t THEN SemErr(14) END;
@@ -266,9 +278,14 @@ Expression <VAR gL, gR: INTEGER>  (. VAR gL2, gR2: INTEGER; first: BOOLEAN; .)
                                    CRT.ConcatAlt(gL, gR, gL2, gR2) .)
   }.
 (*------------------------------------------------------------------------------------*)
-Term<VAR gL, gR: INTEGER>       (. VAR gL2, gR2: INTEGER; .)
+Term<VAR gL, gR: INTEGER>       (. VAR gL2, gR2: INTEGER; rslvG: CRT.GraphNode; .)
 =                               (. gL := 0; gR := 0 .)
-  ( Factor <gL, gR>
+  ( [                           (. gL := CRT.NewNode(CRT.rslv, 0, CRS.line); gR := gL;
+                                   CRT.GetNode(gL, rslvG) .)
+      Resolver<rslvG.pos>       (. CRT.PutNode(gL, rslvG) .)
+    ]
+    Factor <gL2, gR2>           (. IF gL # 0 THEN CRT.ConcatSeq(gL, gR, gL2, gR2)
+                                   ELSE gL := gL2; gR := gR2 END .)
     { Factor <gL2, gR2>         (. CRT.ConcatSeq(gL, gR, gL2, gR2) .)
     }
   |                             (. gL := CRT.NewNode(CRT.eps, 0, 0); gR := gL .)
@@ -283,13 +300,22 @@ Factor <VAR gL, gR: INTEGER>    (. VAR sp, kind (* , c *): INTEGER; name: CRT.Na
                                 (. gL :=0; gR := 0; weak := FALSE .)
 ( [ "WEAK"                      (. weak := TRUE .)
   ]
-  Symbol <name, kind>           (. sp := CRT.FindSym(name); undef := sp = CRT.noSym;
+  Symbol <name, kind>           (. sp := CRT.FindSym(name);
+                                   IF (sp = CRT.noSym) & (kind = string) THEN
+                                     sp := CRT.FindLit(name)
+                                   END;
+                                   undef := sp = CRT.noSym;
                                    IF undef THEN
                                      IF kind = ident THEN  (*forward nt*)
                                        sp := CRT.NewSym(CRT.nt, name, 0)
-                                     ELSE  (*undefined string in production*)
+                                     ELSIF genScanner THEN
                                        sp := CRT.NewSym(CRT.t, name, CRS.line);
-                                       MatchLiteral(sp)
+                                       MatchLiteral(name, sp)
+                                     ELSE  (*undefined string in production*)
+                                       (* sp := CRT.NewSym(CRT.t, name, CRS.line);
+                                       MatchLiteral(sp) *)
+                                       SemErr(28); (* undefined string in production *)
+                                       sp := CRT.eofSy (* dummy *)
                                      END
                                    END;
                                    CRT.GetSym(sp, sn);
@@ -320,6 +346,14 @@ Factor <VAR gL, gR: INTEGER>    (. VAR sp, kind (* , c *): INTEGER; name: CRT.Na
 | "SYNC"                        (. gL := CRT.NewNode(CRT.sync, 0, 0); gR := gL .)
 ).
 (*------------------------------------------------------------------------------------*)
+Resolver <VAR pos: CRT.Position>
+=
+  "IF" "("                      (. pos.beg := CRS.nextPos; pos.col := CRS.nextCol .)
+  Condition                     (. pos.len := SHORT(CRS.pos - pos.beg) .)
+.
+(*------------------------------------------------------------------------------------*)
+Condition = { "(" Condition | ANY } ")" .
+(*------------------------------------------------------------------------------------*)
 TokenExpr <VAR gL, gR: INTEGER> (. VAR gL2, gR2: INTEGER; first: BOOLEAN; .)
 =
   TokenTerm <gL, gR>            (. first := TRUE .)
@@ -349,13 +383,17 @@ TokenFactor <VAR gL, gR: INTEGER> (. VAR kind, c: INTEGER; set: CRT.Set; name: C
                                        SemErr(15); 
                                        Sets.Clear(set); c := CRT.NewClass(name, set)
                                      END;
-                                     gL := CRT.NewNode(CRT.class, c, 0); gR := gL
+                                     gL := CRT.NewNode(CRT.class, c, 0); gR := gL;
+                                     tokenString := noString
                                    ELSE (*string*)
-                                     CRT.StrToGraph(name, gL, gR)
+                                     CRT.StrToGraph(name, gL, gR);
+                                     IF tokenString = "" THEN tokenString := name
+                                     ELSE tokenString := noString
+                                     END
                                    END .)
 | "(" TokenExpr <gL, gR> ")"
-| "[" TokenExpr <gL, gR> "]"    (. CRT.MakeOption(gL, gR) .)
-| "{" TokenExpr <gL, gR> "}"    (. CRT.MakeIteration(gL, gR) .)
+| "[" TokenExpr <gL, gR> "]"    (. CRT.MakeOption(gL, gR); tokenString := noString .)
+| "{" TokenExpr <gL, gR> "}"    (. CRT.MakeIteration(gL, gR); tokenString := noString .)
 ).
 (*------------------------------------------------------------------------------------*)
 Symbol <VAR name: CRT.Name; VAR kind: INTEGER> = 

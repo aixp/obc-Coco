@@ -74,13 +74,14 @@ BEGIN
 	END
 END PutSet1;
 
-PROCEDURE Length*(s: ARRAY OF CHAR): SHORTINT;
+PROCEDURE Length* (CONST s: ARRAY OF CHAR): SHORTINT;
 	VAR i: SHORTINT;
 BEGIN
 	i:=0; WHILE (i < LEN(s)) & (s[i] # 0X) DO INC(i) END ;
 	RETURN i
 END Length;
 
+(*
 PROCEDURE Alternatives(gp: SHORTINT): SHORTINT;
 	VAR gn: CRT.GraphNode; n: SHORTINT;
 BEGIN
@@ -90,6 +91,49 @@ BEGIN
 	END ;
 	RETURN n
 END Alternatives;
+*)
+
+(* A. V. Shiryaev, 2012.01 *)
+PROCEDURE Overlaps (CONST s1, s2: CRT.Set): BOOLEAN;
+	VAR s3: CRT.Set;
+BEGIN
+	Sets.Intersect(s1, s2, s3);
+	RETURN ~Sets.Empty(s3)
+END Overlaps;
+
+(* A. V. Shiryaev, 2012.01 *)
+PROCEDURE UseCase (gp: SHORTINT): BOOLEAN;
+	VAR gn, gn2: CRT.GraphNode; nAlts: SHORTINT;
+		res: BOOLEAN;
+		s1, s2: CRT.Set;
+BEGIN
+	IF gp > 0 THEN
+		CRT.GetNode(gp, gn);
+		IF gn.typ # CRT.alt THEN res := FALSE
+		ELSE
+			nAlts := 0;
+			Sets.Clear(s1);
+			res := TRUE;
+			REPEAT
+				CRT.GetNode(gp, gn);
+				IF gn.p1 > 0 THEN
+					CRT.CompExpected0(gn.p1, curSy, s2);
+					IF Overlaps(s1, s2) THEN res := FALSE (* must not optimiza with CASE statement, if there are LL(1) warning(s) *)
+					ELSE Sets.Unite(s1, s2);
+						CRT.GetNode(gn.p1, gn2);
+						IF gn2.typ = CRT.rslv THEN res := FALSE
+						END (* must not optimize with CASE statement, if alt uses a resolver expression *)
+					END
+				END;
+				gp := gn.p2; INC(nAlts)
+			UNTIL ~res OR (gp <= 0);
+			res := res & (nAlts > 5)
+		END
+	ELSE
+		res := FALSE
+	END;
+RETURN res
+END UseCase;
 
 PROCEDURE CopyFramePart (stopStr: ARRAY OF CHAR); (*Copy from file <fram> to file <syn> until <stopStr>*)
 	VAR ch, startCh: CHAR; i, j, high: SHORTINT;
@@ -184,43 +228,49 @@ BEGIN
 	RETURN maxSS
 END NewCondSet;
 
-PROCEDURE GenCond (set: CRT.Set);
+PROCEDURE GenCond (set: CRT.Set; gp: SHORTINT);
 	VAR i, n: SHORTINT;
+		gn: CRT.GraphNode;
 
 BEGIN
-	n := Sets.Elements(set, i);
-	(*IF n = 0 THEN PutS(" FALSE")  (*this branch should never be taken*)
-	ELSIF (n > 1) & Small(set) THEN
-		PutS(" sym IN {"); PutSet(set[0]); PutS("} ")
-	ELSIF n <= maxTerm THEN
-		i := 0;
-		WHILE i <= CRT.maxT DO
-			IF Sets.In (set, i) THEN
-				PutS(" (sym = "); PutI(i); Texts.Write(syn, ")");
-				DEC(n); IF n > 0 THEN PutS(" OR") END
-			END ;
-			INC(i)
-		END
-	ELSE PutS(" sym IN symSet["); PutI(NewCondSet(set)); PutS(",0]")
-	END ;*)
-	IF n = 0 THEN PutS(" FALSE")  (*this branch should never be taken*)
-	ELSIF n <= maxTerm THEN
-		i := 0;
-		WHILE i <= CRT.maxT DO
-			IF Sets.In (set, i) THEN
-				PutS(" (sym = "); PutI(i); Texts.Write(syn, ")");
-				DEC(n); IF n > 0 THEN PutS(" OR") END
-			END ;
-			INC(i)
-		END
-	ELSE PutS(" StartOf("); PutI(NewCondSet(set)); PutS(") ")
-	END ;
-
+	CRT.GetNode(gp, gn);
+	IF gn.typ = CRT.rslv THEN
+		PutS(" "); CopySourcePart(gn.pos, 0)
+	ELSE
+		n := Sets.Elements(set, i);
+		(*IF n = 0 THEN PutS(" FALSE")  (*this branch should never be taken*)
+		ELSIF (n > 1) & Small(set) THEN
+			PutS(" sym IN {"); PutSet(set[0]); PutS("} ")
+		ELSIF n <= maxTerm THEN
+			i := 0;
+			WHILE i <= CRT.maxT DO
+				IF Sets.In (set, i) THEN
+					PutS(" (sym = "); PutI(i); Texts.Write(syn, ")");
+					DEC(n); IF n > 0 THEN PutS(" OR") END
+				END ;
+				INC(i)
+			END
+		ELSE PutS(" sym IN symSet["); PutI(NewCondSet(set)); PutS(",0]")
+		END ;*)
+		IF n = 0 THEN PutS(" FALSE")  (*this branch should never be taken*)
+		ELSIF n <= maxTerm THEN
+			i := 0;
+			WHILE i <= CRT.maxT DO
+				IF Sets.In (set, i) THEN
+					PutS(" (sym = "); PutI(i); Texts.Write(syn, ")");
+					DEC(n); IF n > 0 THEN PutS(" OR") END
+				END ;
+				INC(i)
+			END
+		ELSE PutS(" StartOf("); PutI(NewCondSet(set)); PutS(") ")
+		END ;
+	END
 END GenCond;
 
 PROCEDURE GenCode (gp, indent: SHORTINT; checked: CRT.Set);
 	VAR gn, gn2: CRT.GraphNode; sn: CRT.SymbolNode; gp2: SHORTINT;
-			s1, s2: CRT.Set; errNr, alts: SHORTINT; equal: BOOLEAN;
+			s1, s2: CRT.Set; errNr (*, alts*): SHORTINT; equal: BOOLEAN;
+			useCase: BOOLEAN;
 BEGIN
 	WHILE gp > 0 DO
 		CRT.GetNode (gp, gn);
@@ -253,6 +303,8 @@ BEGIN
 
 		| CRT.eps: (* nothing *)
 
+		| CRT.rslv: (* nothing *)
+
 		| CRT.sem:
 				CopySourcePart(gn.pos, indent); PutS(";$");
 
@@ -260,22 +312,23 @@ BEGIN
 				CRT.GetSet(gn.p1, s1);
 				GenErrorMsg (syncErr, curSy, errNr);
 				Indent(indent);
-				PutS("WHILE ~("); GenCond(s1); PutS(") DO Error(");
+				PutS("WHILE ~("); GenCond(s1, gn.p1 (* FIXME?: gp or gn.p1 ? *)); PutS(") DO Error(");
 				PutI(errNr); PutS("); Get END ;$")
 
 		| CRT.alt:
 				CRT.CompFirstSet(gp, s1); equal := Sets.Equal(s1, checked);
-				alts := Alternatives(gp);
-				IF alts > 5 THEN Indent(indent); PutS("CASE sym OF$") END ;
+				(* alts := Alternatives(gp); *)
+				useCase := UseCase(gp);
+				IF (* alts > 5 *) useCase THEN Indent(indent); PutS("CASE sym OF$") END ;
 				gp2 := gp;
 				WHILE gp2 # 0 DO
 					CRT.GetNode(gp2, gn2);
 					CRT.CompExpected(gn2.p1, curSy, s1);
 					Indent(indent);
-					IF alts > 5 THEN PutS("| "); PutSet1(s1); PutS(": ") (*case labels*)
-					ELSIF gp2 = gp THEN PutS("IF"); GenCond(s1); PutS(" THEN$")
+					IF (* alts > 5 *) useCase THEN PutS("| "); PutSet1(s1); PutS(": ") (*case labels*)
+					ELSIF gp2 = gp THEN PutS("IF"); GenCond(s1, gn.p1); PutS(" THEN$")
 					ELSIF (gn2.p2 = 0) & equal THEN PutS("ELSE$")
-					ELSE PutS("ELSIF"); GenCond(s1); PutS(" THEN$")
+					ELSE PutS("ELSIF"); GenCond(s1, gn2.p1); PutS(" THEN$")
 					END ;
 					Sets.Unite(s1, checked);
 					GenCode(gn2.p1, indent + 2, s1);
@@ -299,7 +352,7 @@ BEGIN
 					Sets.Clear(s1); (*for inner structure*)
 					IF gn2.next > 0 THEN gp2 := gn2.next ELSE gp2 := 0 END
 				ELSE
-					gp2 := gn.p1; CRT.CompFirstSet(gp2, s1); GenCond(s1)
+					gp2 := gn.p1; CRT.CompFirstSet(gp2, s1); GenCond(s1, gn.p1)
 				END ;
 				PutS(" DO$");
 				GenCode(gp2, indent + 2, s1);
@@ -308,7 +361,7 @@ BEGIN
 		| CRT.opt:
 				CRT.CompFirstSet(gn.p1, s1);
 				IF ~ Sets.Equal(checked, s1) THEN
-					Indent(indent); PutS("IF"); GenCond(s1); PutS(" THEN$");
+					Indent(indent); PutS("IF"); GenCond(s1, gn.p1); PutS(" THEN$");
 					GenCode(gn.p1, indent + 2, s1);
 					Indent(indent); PutS("END ;$")
 				ELSE GenCode(gn.p1, indent, checked)
@@ -319,6 +372,25 @@ BEGIN
 		gp := gn.next
 	END
 END GenCode;
+
+PROCEDURE IsLetter (c: CHAR): BOOLEAN;
+BEGIN
+	RETURN (c >= "A") & (c <= "Z") OR (c >= "a") & (c <= "z")
+END IsLetter;
+
+(* A. V. Shiryaev, 2012.01 *)
+PROCEDURE GenTokens;
+	VAR i: SHORTINT; sn: CRT.SymbolNode;
+BEGIN
+	i := 0;
+	WHILE i < CRT.maxT DO
+		CRT.GetSym(i, sn);
+		IF IsLetter(sn.name[0]) THEN
+			PutS("  "); PutS(sn.name); PutS("Token = "); PutI(i); PutS(";$") (* do not use '_' in Oberon identifiers *)
+		END;
+		INC(i)
+	END
+END GenTokens;
 
 PROCEDURE GenCodePragmas;
 	VAR i: SHORTINT; sn: CRT.SymbolNode;
@@ -391,60 +463,140 @@ BEGIN
 	END
 END InitSets;
 
-PROCEDURE GenCompiler*;
-	VAR errNr, i: SHORTINT; checked: CRT.Set;
-			gn: CRT.GraphNode; sn: CRT.SymbolNode;
-			parser: ARRAY 32 OF CHAR;
-			t: Texts.Text; pos: INTEGER;	f: Files.File;
+(* A. V. Shiryaev, 2012.01 *)
+(* d := s0 + s1 *)
+PROCEDURE Append1 (VAR d: ARRAY OF CHAR; CONST s0, s1: ARRAY OF CHAR);
+	VAR i, j: SHORTINT;
 BEGIN
-	CRT.GetNode(CRT.root, gn); CRT.GetSym(gn.p1, sn);
-	COPY(sn.name, parser); i := Length(parser); parser[i] := "P"; parser[i+1] := 0X;
-	COPY(parser, scanner); scanner[i] := "S";
+	COPY(s0, d);
+	i := Length(d);
+	j := Length(s1);
+	d[i+j] := 0X;
+	WHILE j > 0 DO
+		DEC(j);
+		d[i+j] := s1[j]
+	END
+END Append1;
 
-	NEW(t); Texts.Open(t, "Parser.FRM"); Texts.OpenReader(fram, t, 0);
-	IF t.len = 0 THEN
-		Texts.WriteString(w, "Parser.FRM not found"); Texts.WriteLn(w);
-		Texts.Append(Oberon.Log, w.buf); HALT(99)
-	END ;
+PROCEDURE GenCompiler*;
+	VAR name, parser, driver: ARRAY 32 OF CHAR;
+		err1: Texts.Buffer;
 
-	Texts.OpenWriter(err); Texts.WriteLn(err);
-	i := 0;
-	WHILE i <= CRT.maxT DO GenErrorMsg(tErr, i, errNr); INC(i) END ;
+	PROCEDURE Names;
+		VAR gn: CRT.GraphNode; sn: CRT.SymbolNode;
+	BEGIN
+		CRT.GetNode(CRT.root, gn); CRT.GetSym(gn.p1, sn);
+		COPY(sn.name, name);
+		Append1(parser, name, "P"); (* parser := name + "P" *)
+		Append1(scanner, name, "S"); (* scanner := name + "S" *)
+		Append1(driver, name, "Compile") (* driver := name + "Compile" *)
+	END Names;
 
-	(*----- write *P.Mod -----*)
-	Texts.OpenWriter(syn);
-	NEW(t);  (* t.notify := Show;  *)  Texts.Open(t, "");
-	CopyFramePart("-->modulename"); PutS(parser);
-	CopyFramePart("-->scanner"); PutS(scanner);
-	IF CRT.importPos.beg >= 0 THEN PutS(", "); CopySourcePart(CRT.importPos, 0) END ;
-	CopyFramePart("-->constants");
-	PutS("maxP        = "); PutI(CRT.maxP); PutS(";$");
-	PutS("  maxT        = "); PutI(CRT.maxT); PutS(";$");
-	PutS("  nrSets = ;$"); Texts.Append(t, syn.buf); pos := t.len - 2;
-	CopyFramePart("-->declarations"); CopySourcePart(CRT.semDeclPos, 0);
-	CopyFramePart("-->errors"); PutS(scanner); PutS(".Error(n, "); PutS(scanner); PutS(".nextPos)");
-	CopyFramePart("-->scanProc");
-	IF CRT.maxT = CRT.maxP THEN PutS(scanner); PutS(".Get(sym)")
-	ELSE
-		PutS("LOOP "); PutS(scanner); PutS(".Get(sym);$");
-		PutS("    IF sym > maxT THEN$");
-		GenCodePragmas;
-		PutS("    ELSE EXIT$");
-		PutS("    END$");
-		PutS("END$")
-	END ;
-	CopyFramePart("-->productions"); GenForwardRefs; GenProductions;
-	CopyFramePart("-->parseRoot"); Sets.Clear(checked); GenCode (CRT.root, 2, checked);
-	CopyFramePart("-->initialization"); InitSets;
-	CopyFramePart("-->modulename"); PutS(parser); Texts.Write(syn, ".");
-	Texts.Append(t, syn.buf); Texts.Append(t, err.buf);
-	PutI(maxSS+1); (*if no set, maxSS = -1*) Texts.Insert(t, pos, syn.buf);
-	i := Length(parser); parser[i] := "."; parser[i+1] := "M"; parser[i+2] := "o"; parser[i+3] := "d"; parser[i+4] := 0X;
-  (*	Texts.Close(t, parser)  *)
-	CRA.Backup(parser);
-	f := Files.New(parser);
-	Texts.Store(t, f, 0, pos);
-	Files.Register(f)
+	PROCEDURE Errors1;
+		VAR errNr, i: SHORTINT;
+	BEGIN
+		Texts.OpenWriter(err); Texts.WriteLn(err);
+		i := 0;
+		WHILE i <= CRT.maxT DO GenErrorMsg(tErr, i, errNr); INC(i) END
+	END Errors1;
+
+	PROCEDURE Store (t: Texts.Text; CONST name: ARRAY OF CHAR);
+		VAR fileName: ARRAY 32 OF CHAR;
+			len: INTEGER;	f: Files.File;
+	BEGIN
+		Append1(fileName, name, ".Mod"); (* fileName := name + ".Mod" *)
+		(*	Texts.Close(t, fileName)  *)
+		CRA.Backup(fileName);
+		f := Files.New(fileName);
+		Texts.Store(t, f, 0, len);
+		Files.Register(f)
+	END Store;
+
+	PROCEDURE GenParser;
+		VAR checked: CRT.Set;
+			t: Texts.Text; pos: INTEGER;
+	BEGIN
+		NEW(t); Texts.Open(t, "Parser.FRM"); Texts.OpenReader(fram, t, 0);
+		IF t.len = 0 THEN
+			Texts.WriteString(w, "Parser.FRM not found"); Texts.WriteLn(w);
+			Texts.Append(Oberon.Log, w.buf); HALT(99)
+		END ;
+
+		(*----- write *P.Mod -----*)
+		Texts.OpenWriter(syn);
+		NEW(t);  (* t.notify := Show;  *)  Texts.Open(t, "");
+		CopyFramePart("-->modulename"); PutS(parser);
+		CopyFramePart("-->scanner"); PutS(scanner);
+		IF CRT.importPos.beg >= 0 THEN PutS(", "); CopySourcePart(CRT.importPos, 0) END ;
+		CopyFramePart("-->constants");
+		GenTokens; (* A. V. Shiryaev, 2012.01 *)
+		PutS("maxP        = "); PutI(CRT.maxP); PutS(";$");
+		PutS("  maxT        = "); PutI(CRT.maxT); PutS(";$");
+		PutS("  nrSets = ;$"); Texts.Append(t, syn.buf); pos := t.len - 2;
+		CopyFramePart("-->declarations"); CopySourcePart(CRT.semDeclPos, 0);
+		CopyFramePart("-->errors"); PutS(scanner); PutS(".Error(n, "); PutS(scanner); PutS(".nextPos)");
+		CopyFramePart("-->scanProc");
+		IF CRT.maxT = CRT.maxP THEN PutS(scanner); PutS(".Get(sym)")
+		ELSE
+			PutS("LOOP "); PutS(scanner); PutS(".Get(sym);$");
+			PutS("    IF sym > maxT THEN$");
+			GenCodePragmas;
+			PutS("    ELSE EXIT$");
+			PutS("    END$");
+			PutS("END$")
+		END ;
+		CopyFramePart("-->productions"); GenForwardRefs; GenProductions;
+		CopyFramePart("-->parseRoot"); Sets.Clear(checked); GenCode (CRT.root, 2, checked);
+		CopyFramePart("-->initialization"); InitSets;
+		CopyFramePart("-->modulename"); PutS(parser); Texts.Write(syn, ".");
+		Texts.Append(t, syn.buf); NEW(err1); Texts.OpenBuf(err1); Texts.Copy(err.buf, err1); Texts.Append(t, err.buf);
+		PutI(maxSS+1); (*if no set, maxSS = -1*) Texts.Insert(t, pos, syn.buf);
+		Store(t, parser)
+	END GenParser;
+
+	(* A. V. Shiryaev, 2012.01 *)
+	PROCEDURE GenDriver;
+		VAR t: Texts.Text;
+			dfName: ARRAY 32 OF CHAR;
+
+		PROCEDURE TryDriver;
+		BEGIN
+			NEW(t); Texts.Open(t, dfName);
+			IF t.len = 0 THEN
+				Texts.WriteString(w, dfName); Texts.WriteString(w, " not found"); Texts.WriteLn(w);
+				Texts.Append(Oberon.Log, w.buf)
+			END
+		END TryDriver;
+
+	BEGIN
+		Append1(dfName, name, "Driver.FRM"); (* dfName := name + "Driver.FRM" *)
+		TryDriver;
+		IF t.len = 0 THEN
+			dfName := "Driver.FRM";
+			TryDriver
+		END;
+		IF t.len # 0 THEN
+			Texts.OpenReader(fram, t, 0);
+			Texts.WriteString(w, " +driver"); Texts.Append(Oberon.Log, w.buf);
+			(*----- write *Compile.Mod -----*)
+			Texts.OpenWriter(syn);
+			NEW(t); Texts.Open(t, "");
+			CopyFramePart("-->modulename"); PutS(driver);
+			CopyFramePart("-->scanner"); PutS(scanner);
+			CopyFramePart("-->parser"); PutS(parser);
+			CopyFramePart("-->errors"); Texts.Append(t, syn.buf); Texts.Append(t, err1);
+			CopyFramePart("-->name"); PutS(name);
+			CopyFramePart("-->modulename"); PutS(driver); Texts.Write(syn, ".");
+			Texts.Append(t, syn.buf);
+			Store(t, driver)
+		END
+	END GenDriver;
+
+BEGIN
+	Names;
+	Errors1;
+	GenParser; (* required *)
+	GenDriver (* optional *)
 END GenCompiler;
 
 PROCEDURE WriteStatistics*;

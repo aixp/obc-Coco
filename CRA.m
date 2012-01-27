@@ -121,7 +121,7 @@ BEGIN
 	PutS("(ch ="); PutC(ch); Put(")")
 END PutChCond;
 
-PROCEDURE Length*(s: ARRAY OF CHAR): SHORTINT;
+PROCEDURE Length* (CONST s: ARRAY OF CHAR): SHORTINT;
 	VAR i: SHORTINT;
 BEGIN
 	i:=0; WHILE (i < LEN(s)) & (s[i] # 0X) DO INC(i) END;

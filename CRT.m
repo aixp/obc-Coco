@@ -13,7 +13,7 @@ CONST
 
 	(* node types *)
 	t* = 1; pr* = 2; nt* = 3; class* = 4; char* = 5; wt* =  6; any* = 7; eps* = 8; sync* = 9; sem* = 10;
-	alt* = 11; iter* = 12; opt* = 13;
+	alt* = 11; iter* = 12; opt* = 13; rslv* = 14;
 
 	noSym* = -1;
 	eofSy* = 0;
@@ -32,7 +32,7 @@ TYPE
 	END ;
 
 	SymbolNode* = RECORD
-		typ*: SHORTINT;				(*nt, t, pr, unknown*)
+		typ*: SHORTINT;				(*nt, t, pr, unknown, rslv*)
 		name*: Name;  				(*symbol name*)
 		struct*: SHORTINT;			(*typ = nt: index of 1st node of syntax graph*)
 												(*typ = t: token kind: literal, class, ...*)
@@ -46,7 +46,7 @@ TYPE
 	Set* = ARRAY maxTerminals DIV Sets.size OF SET;
 
 	GraphNode* = RECORD
-		typ* : SHORTINT;		(* nt,sts,wts,char,class,any,eps,sem,sync,alt,iter,opt*)
+		typ* : SHORTINT;		(* nt,sts,wts,char,class,any,eps,sem,sync,alt,iter,opt,rslv*)
 		next*: SHORTINT;		(* index of successor node                        *)
 										(* next < 0: to successor in enclosing structure  *)
 		p1*: SHORTINT;		 (* typ IN {nt, t, wt}: index to symbol list       *)
@@ -60,6 +60,7 @@ TYPE
 										(* typ IN {char, class}: transition code          *)
 		pos*: Position;		(* typ IN {nt, t, wt}: pos of actual attribs      *)
 										(* typ = sem: pos of sem action in source text.   *)
+										(* typ = rslv: pos of resolver in source text     *)
 		line*: SHORTINT;      (* source text line number of item in this node   *)
 	END ;
 
@@ -80,6 +81,13 @@ TYPE
 	SymbolTable = ARRAY maxSymbols OF SymbolNode;
 	ClassTable = ARRAY maxClasses OF CharClass;
 	GraphList = ARRAY maxNodes OF GraphNode;
+
+	LitNode = POINTER TO LitNodeDesc;
+	LitNodeDesc = RECORD
+		next: LitNode;
+		str: Name;
+		sp: SHORTINT
+	END;
 
 VAR
 	maxSet*:  SHORTINT; (* index of last set                                  *)
@@ -105,6 +113,8 @@ VAR
 	set: ARRAY 128 OF Set;	(*set[0] reserved for union of all synchronisation sets*)
 	dummyName: SHORTINT; (*for unnamed character classes*)
 
+	literals: LitNode; (* A. V. Shiryaev, 2012.01 *) (* symbols that are used as literals *)
+
 PROCEDURE Str(s: ARRAY OF CHAR);
 BEGIN Texts.WriteString(w, s)
 END Str;
@@ -113,7 +123,7 @@ PROCEDURE NL;
 BEGIN Texts.WriteLn(w)
 END NL;
 
-PROCEDURE Length(s: ARRAY OF CHAR): SHORTINT;
+PROCEDURE Length (CONST s: ARRAY OF CHAR): SHORTINT;
 	VAR i: SHORTINT;
 BEGIN
 	i:=0; WHILE (i < LEN(s)) & (s[i] # 0X) DO INC(i) END ;
@@ -148,6 +158,15 @@ BEGIN
 	GetNode(gp, gn);
 	RETURN DelNode(gn) & DelGraph(ABS(gn.next));
 END DelGraph;
+
+(* A. V. Shiryaev, 2012.01 *)
+PROCEDURE DelSubGraph (gp: SHORTINT): BOOLEAN;
+	VAR gn: GraphNode;
+BEGIN
+	IF gp = 0 THEN RETURN TRUE END; (* end of graph found *)
+	GetNode(gp, gn);
+	RETURN DelNode(gn) & ( (gn.next < 0) OR DelSubGraph(ABS(gn.next)) )
+END DelSubGraph;
 
 PROCEDURE NewSym*(typ: SHORTINT; name: Name; line: SHORTINT): SHORTINT;
 	VAR i: SHORTINT;
@@ -194,6 +213,32 @@ BEGIN
 	set[maxSet] := s;
 	RETURN maxSet
 END NewSet;
+
+(* A. V. Shiryaev, 2012.01 *)
+PROCEDURE NewLit* (CONST str: ARRAY OF CHAR; sp: SHORTINT);
+	VAR n: LitNode; (* w: Texts.Writer; *)
+BEGIN
+	(* Texts.OpenWriter(w);
+	Texts.WriteString(w, "CRT.NewLit: "); Texts.WriteString(w, str); Texts.WriteString(w, " ");
+		Texts.WriteInt(w, sp, 0); Texts.WriteLn(w); Texts.Append(Oberon.Log, w.buf); *)
+	NEW(n); n.next := literals; literals := n;
+	COPY(str, n.str); n.sp := sp
+END NewLit;
+
+(* A. V. Shiryaev, 2012.01 *)
+PROCEDURE FindLit* (CONST str: ARRAY OF CHAR): SHORTINT;
+	VAR n: LitNode; res: SHORTINT; (* w: Texts.Writer; *)
+BEGIN
+	n := literals;
+	WHILE (n # NIL) & (str # n.str) DO n := n.next END;
+	IF n = NIL THEN res := noSym
+	ELSE res := n.sp
+	END;
+	(* Texts.OpenWriter(w);
+	Texts.WriteString(w, "CRT.FindLit: "); Texts.WriteString(w, str); Texts.WriteString(w, " ");
+		Texts.WriteInt(w, res, 0); Texts.WriteLn(w); Texts.Append(Oberon.Log, w.buf); *)
+RETURN res
+END FindLit;
 
 PROCEDURE PrintSet(s: ARRAY OF SET; indent: SHORTINT);
 	CONST maxLineLen = 80;
@@ -270,6 +315,17 @@ BEGIN
 	CompFirstSet(gp, exp);
 	IF DelGraph(gp) THEN Sets.Unite(exp, follow[sp - firstNt].ts) END
 END CompExpected;
+
+(* A. V. Shiryaev, 2012.01 *)
+(* does not look behind resolvers; only called during LL(1) test and in CheckRes *)
+PROCEDURE CompExpected0* (gp, sp: SHORTINT; VAR exp: Set);
+	VAR gn: GraphNode;
+BEGIN
+	GetNode(gp, gn);
+	IF gn.typ = rslv THEN Sets.Clear(exp)
+	ELSE CompExpected(gp, sp, exp)
+	END
+END CompExpected0;
 
 PROCEDURE CompFollowSets;
 	VAR sn: SymbolNode; curSy, i, size: SHORTINT; visited: MarkList;
@@ -692,7 +748,7 @@ PROCEDURE DelNode*(gn: GraphNode): BOOLEAN;
 BEGIN
 	IF gn.typ = nt THEN GetSym(gn.p1, sn); RETURN sn.deletable
 	ELSIF gn.typ = alt THEN RETURN DelAlt(gn.p1) OR (gn.p2 # 0) & DelAlt(gn.p2)
-	ELSE RETURN gn.typ IN {eps, iter, opt, sem, sync}
+	ELSE RETURN gn.typ IN {eps, iter, opt, sem, sync, rslv}
 	END
 END DelNode;
 
@@ -712,6 +768,7 @@ PROCEDURE PrintGraph*;
 		| alt : Str("alt ")
 		| iter: Str("iter")
 		| opt : Str("opt ")
+		| rslv: Str("rslv ")
 		ELSE Str("--- ")
 		END ;
 	END WriteTyp;
@@ -824,6 +881,7 @@ PROCEDURE LL1Test* (VAR ll1: BOOLEAN);
 			1: Str(" start of several alternatives.")
 		| 2: Str(" start & successor of deletable structure")
 		| 3: Str(" an ANY node that matchs no symbol")
+		| 4: Str(" contents of [...] or {...} must not be deletable")
 		END ;
 		NL; Texts.Append(Oberon.Log, w.buf)
 	END LL1Error;
@@ -846,15 +904,18 @@ PROCEDURE LL1Test* (VAR ll1: BOOLEAN);
 			IF gn.typ = alt THEN
 				p := gp; Sets.Clear(s1);
 				WHILE p # 0 DO  (*for all alternatives*)
-					GetNode(p, gn1); CompExpected(gn1.p1, curSy, s2);
+					GetNode(p, gn1); CompExpected0(gn1.p1, curSy, s2);
 					Check(1, s1, s2); Sets.Unite(s1, s2);
 					CheckAlternatives(gn1.p1);
 					p := gn1.p2
 				END
 			ELSIF gn.typ IN {opt, iter} THEN
-				CompExpected(gn.p1, curSy, s1);
-				CompExpected(ABS(gn.next), curSy, s2);
-				Check(2, s1, s2);
+				IF DelSubGraph(gn.p1) THEN (* e.g. [[...]] *) LL1Error(4, 0)
+				ELSE
+					CompExpected0(gn.p1, curSy, s1);
+					CompExpected(ABS(gn.next), curSy, s2);
+					Check(2, s1, s2)
+				END;
 				CheckAlternatives(gn.p1)
 			ELSIF gn.typ = any THEN
 				GetSet(gn.p1, s1);
@@ -871,6 +932,86 @@ BEGIN (* LL1Test *)
 		INC (curSy)
 	END ;
 END LL1Test;
+
+
+(* A. V. Shiryaev, 2012.01 *)
+PROCEDURE TestResolvers* (VAR ok: BOOLEAN);
+	VAR curSy: SHORTINT; sn: SymbolNode;
+
+	PROCEDURE ResErr (gn: GraphNode; CONST msg: ARRAY OF CHAR);
+	BEGIN
+		ok := FALSE;
+		Str("  pos "); Texts.WriteInt(w, gn.pos.beg, 0); Str(": ");
+		Str(msg);
+		NL; Texts.Append(Oberon.Log, w.buf)
+	END ResErr;
+
+	PROCEDURE CheckRes (gp: SHORTINT; rslvAllowed: BOOLEAN);
+		VAR gn, gn2, gn3: GraphNode; gp2: SHORTINT;
+			fs, fsNext, s3, expected, soFar: Set;
+	BEGIN
+		WHILE gp > 0 DO
+			GetNode(gp, gn);
+			IF gn.typ = alt THEN
+				Sets.Clear(expected);
+				gp2 := gp;
+				WHILE gp2 > 0 DO
+					GetNode(gp2, gn2);
+					CompExpected0(gn2.p1, curSy, s3);
+					Sets.Unite(expected, s3);
+					gp2 := gn2.p2
+				END;
+				Sets.Clear(soFar);
+				gp2 := gp;
+				WHILE gp2 > 0 DO
+					GetNode(gp2, gn2);
+					GetNode(gn2.p1, gn3);
+					IF gn3.typ = rslv THEN
+						CompExpected(gn3.next, curSy, fs);
+						Sets.Intersect(fs, soFar, s3);
+						IF ~Sets.Empty(s3) THEN
+							ResErr(gn3, "Warning: Resolver will never be evaluated. Place it at previous conflicting alternative.")
+						END;
+						Sets.Intersect(fs, expected, s3);
+						IF Sets.Empty(s3) THEN
+							ResErr(gn3, "Warning: Misplaced resolver: no LL(1) conflict.")
+						END
+					ELSE
+						CompExpected(gn2.p1, curSy, s3);
+						Sets.Unite(soFar, s3)
+					END;
+					CheckRes(gn2.p1, TRUE);
+					gp2 := gn2.p2
+				END
+			ELSIF (gn.typ = iter) OR (gn.typ = opt) THEN
+				GetNode(gn.p1, gn2);
+				IF gn2.typ = rslv THEN
+					CompFirstSet(gn2.next, fs);
+					CompExpected(gn.next, curSy, fsNext);
+					Sets.Intersect(fs, fsNext, s3);
+					IF Sets.Empty(s3) THEN
+						ResErr(gn2, "Warning: Misplaced resolver: no LL(1) conflict.")
+					END
+				END;
+				CheckRes(gn.p1, TRUE)
+			ELSIF gn.typ = rslv THEN
+				IF ~rslvAllowed THEN
+					ResErr(gn, "Warning: Misplaced resolver: no alternative.")
+				END
+			END;
+			rslvAllowed := FALSE;
+			gp := gn.next
+		END
+	END CheckRes;
+
+BEGIN
+	curSy := firstNt; ok := TRUE;
+	WHILE curSy <= lastNt DO (* for all nonterminals *)
+		GetSym(curSy, sn);
+		CheckRes(sn.struct, FALSE);
+		INC(curSy)
+	END
+END TestResolvers;
 
 
 PROCEDURE TestCompleteness* (VAR ok: BOOLEAN);

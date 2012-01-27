@@ -6,10 +6,46 @@
 
 .SUFFIXES: .Mod .m .k
 
-all: CocoCompile
+all: CocoCompile ACompile Oberon07Compile
 
 CocoCompile: OFiles.k Reals.k Display.k Texts.k Sets.k Oberon.k CRS.k CRT.k CRA.k CRX.k CRP.k Coco.k CocoCompile.k
-	obc -o ${.TARGET} ${.ALLSRC}
+	obc -j0 -o ${.TARGET} ${.ALLSRC}
+
+##
+
+ACompile: OFiles.k Reals.k Display.k Texts.k Oberon.k AS.k AP.k ACompile.k
+	obc -j0 -o ${.TARGET} ${.ALLSRC}
+
+ACompile.k: AS.k AP.k Texts.k Oberon.k
+
+AP.k: AS.k
+
+AP.Mod: A.ATG
+	./CocoCompile ${.ALLSRC}
+
+AS.Mod: A.ATG
+	./CocoCompile ${.ALLSRC}
+
+ACompile.Mod: A.ATG
+	./CocoCompile ${.ALLSRC}
+
+##
+
+Oberon07Compile: OFiles.k Reals.k Display.k Texts.k Oberon.k Oberon07S.k Oberon07P.k Oberon07Compile.k
+	obc -j0 -o ${.TARGET} ${.ALLSRC}
+
+Oberon07Compile.k: Oberon07S.k Oberon07P.k Texts.k Oberon.k
+
+Oberon07P.k: Oberon07S.k
+
+Oberon07P.Mod: Oberon07.ATG
+	./CocoCompile ${.ALLSRC}
+
+Oberon07S.Mod: Oberon07.ATG
+	./CocoCompile ${.ALLSRC}
+
+Oberon07Compile.Mod: Oberon07.ATG
+	./CocoCompile ${.ALLSRC}
 
 ###
 
@@ -44,4 +80,4 @@ Sets.k: Texts.k
 	obc -c ${.IMPSRC}
 
 clean:
-	rm -f *.k CocoCompile *.tmp
+	rm -f *.k CocoCompile *.tmp AP* AS* ACompile* Oberon07S* Oberon07P* Oberon07Compile* *.core

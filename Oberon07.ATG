@@ -1,0 +1,200 @@
+COMPILER Oberon07
+
+(*
+	Alexander Shiryaev, 2012.01
+
+	References:
+		N. Wirth, Oberon07.Report.pdf, Revision 22.9.2011
+		LL(1) conflict-less Oberon-2.atg from Coco Contributions/Java/
+	Extensions:
+		leaf procedures
+		interrupt procedures
+		string token extended (quotes related)
+*)
+
+TYPE
+	ModName = ARRAY 32 OF CHAR;
+	ModNode = POINTER TO ModNodeDesc;
+	ModNodeDesc = RECORD
+		next: ModNode;
+		name: ModName
+	END;
+
+VAR
+	modules: ModNode; (* for semantic check in Qualident production *)
+
+PROCEDURE AddMod;
+	VAR mod: ModNode;
+BEGIN
+	NEW(mod); mod.next := modules; modules := mod;
+	Oberon07S.GetName(Oberon07S.pos, Oberon07S.len, mod.name)
+END AddMod;
+
+PROCEDURE FindMod (CONST name: ARRAY OF CHAR): BOOLEAN;
+	VAR mod: ModNode;
+BEGIN
+	mod := modules;
+	WHILE (mod # NIL) & (mod.name # name) DO mod := mod.next END;
+	RETURN mod # NIL
+END FindMod;
+
+PROCEDURE IsModule (): BOOLEAN;
+	VAR name: ModName;
+BEGIN
+	Oberon07S.GetName(Oberon07S.nextPos, Oberon07S.nextLen, name);
+	RETURN FindMod(name)
+END IsModule;
+
+PROCEDURE IsDesignatorPart (): BOOLEAN;
+	VAR res: BOOLEAN; name: ARRAY 32 OF CHAR;
+BEGIN
+	IF sym = dotToken THEN
+		res := TRUE
+	ELSIF sym = lbrackToken THEN
+		res := TRUE
+	ELSIF sym = arrowToken THEN
+		res := TRUE
+	ELSIF sym = lparToken THEN
+		Oberon07S.GetName(Oberon07S.pos, Oberon07S.len, name);
+		Oberon07S.Error(200, Oberon07S.nextPos);
+		(* TODO: semantic analysis *)
+		res := FALSE
+	ELSE
+		res := FALSE
+	END;
+RETURN res
+END IsDesignatorPart;
+
+CHARACTERS
+	tab = CHR(9) .
+	lf = CHR(10) .
+	cr = CHR(13) .
+	letter = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" .
+	digit = "0123456789" .
+	hexDigit = digit + "ABCDEF" .
+	noQuote1 = ANY - '"' - lf - cr .
+	noQuote2 = ANY - "'" - lf - cr .
+
+TOKENS
+	ident = letter { letter | digit } .
+	integer = digit { digit } | digit { digit } CONTEXT ("..")
+		| digit { hexDigit } "H"  .
+	real = digit { digit } "." { digit }
+		[ ( "E" | "D" ) [ "+" | "-" ] digit { digit } ] .
+	string =
+		'"' { noQuote1 } '"' | "'" { noQuote2 } "'"
+		| digit { hexDigit } "X" .
+
+	(* for semantic check in Designator production *)
+	dot = "." .
+	lbrack = "[" .
+	arrow = "^" .
+	lpar = "(" .
+
+COMMENTS FROM '(*' TO '*)' NESTED
+
+IGNORE tab + lf + cr
+
+PRODUCTIONS
+	(* Top *)
+	Oberon07 =
+		Module .
+	Module = "MODULE" ident
+		";" [ ImportList ] DeclarationSequence
+		[ "BEGIN" StatementSequence ]
+		"END" ident
+		"." .
+	ImportList = "IMPORT" ImportListMember { "," ImportListMember } ";" .
+	ImportListMember = ident										(. AddMod .)
+		[ ":=" ident ] .
+
+	(* Declarations *)
+	DeclarationSequence = SYNC
+		[ "CONST" { ConstantDeclaration ";" } ]
+		[ "TYPE" { TypeDeclaration ";" } ]
+		[ "VAR" { VariableDeclaration ";" } ]
+		{ ProcedureDeclaration ";" } .
+	ConstantDeclaration = IdentDef "=" ConstExpression .
+	ConstExpression = Expression .
+	TypeDeclaration = IdentDef "=" StrucType .
+	VariableDeclaration = IdentList ":" Type .
+	IdentList = IdentDef { "," IdentDef } .
+
+	(* Types *)
+	StrucType = ArrayType | RecordType | PointerType | ProcedureType .
+	ArrayType = "ARRAY" Length { "," Length } "OF" Type .
+	RecordType = "RECORD" [ "(" BaseType ")" ] [ FieldListSequence ] "END" .
+	BaseType = Qualident .
+	FieldListSequence = FieldList { ";" FieldList } .
+	FieldList = IdentList ":" Type .
+	Length = ConstExpression .
+	PointerType = "POINTER" "TO" Type .
+	ProcedureType = "PROCEDURE" [ FormalParameters ] .
+	Type = SYNC Qualident | StrucType .
+
+	(* Procedures *)
+	ProcedureDeclaration = ProcedureHeading ";" ProcedureBody ident .
+	ProcedureHeading = "PROCEDURE" [ "*" ] IdentDef
+		[ FormalParameters | InterruptPrio ] .
+	ProcedureBody = DeclarationSequence [ "BEGIN" StatementSequence ]
+		[ "RETURN" Expression ] "END" .
+	FormalParameters = "(" [ FPSection { ";" FPSection } ] ")" [ ":" Qualident ] .
+	InterruptPrio = "[" integer "]" .
+	FPSection = [ "CONST" | "VAR" ] ident { "," ident } ":" FormalType .
+	FormalType = [ "ARRAY" "OF" ] Qualident .
+
+	(* Expressions *)
+	Expression = SimpleExpression [ Relation SimpleExpression ] .
+	Relation = "=" | "#" | "<" | "<=" | ">" | ">=" | "IN" | "IS" .
+	SimpleExpression = [ "+" | "-" ] Term { AddOperator Term } .
+	AddOperator = "+" | "-" | "OR" .
+	Term = Factor { MulOperator Factor } .
+	MulOperator = "*" | "/" | "DIV" | "MOD" | "&" .
+	Factor = SYNC Number | string | "NIL" | "TRUE" | "FALSE"
+		| Set
+		| Factor1 | "(" Expression ")"
+		| "~" Factor .
+	Number = integer | real .
+	Set = "{" [ Element { "," Element } ] "}" .
+	Element = Expression [ ".." Expression ] .
+	ExpList = Expression { "," Expression } .
+
+	(* Statements *)
+	StatementSequence = SYNC Statement { SYNC ";" Statement } .
+	Statement = [ AssignmentOrProcedureCall
+		| IfStatement | CaseStatement | WhileStatement | RepeatStatement | ForStatement
+	] .
+	IfStatement = "IF" Expression "THEN" StatementSequence
+		{ "ELSIF" Expression "THEN" StatementSequence }
+		[ "ELSE" StatementSequence ] "END" .
+	CaseStatement = "CASE" Expression "OF" Case { "|" Case } "END" .
+	Case = [ CaseLabelList ":" StatementSequence ] .
+	CaseLabelList = LabelRange { "," LabelRange } .
+	LabelRange = Label [ ".." Label ] .
+	Label = integer | string | ident .
+	WhileStatement = "WHILE" Expression "DO" StatementSequence
+		{ "ELSIF" Expression "DO" StatementSequence } "END" .
+	RepeatStatement = "REPEAT" StatementSequence "UNTIL" Expression .
+	ForStatement = "FOR" ident ":=" Expression "TO" Expression [ "BY" ConstExpression ]
+		"DO" StatementSequence "END" .
+
+	IdentDef = ident [ "*" ] .
+
+(* LL(1) related *)
+
+	Qualident = [ IF(IsModule()) ident "." ] ident .
+
+	(*
+		from orig. grammar:
+			Designator = Qualident { Selector } .
+			Qualident = [ ident "." ] ident .
+			Selector = "." ident | "[" ExpList "]" | "^" | "(" Qualident ")" .
+	*)
+
+	Designator = Qualident { IF(IsDesignatorPart()) ( "." ident | "[" ExpList "]" | "^" | "(" Qualident ")" ) } .
+
+	Factor1 = Designator [ ActualParameters ] .
+	AssignmentOrProcedureCall = Designator ( ":=" Expression | [ ActualParameters ] ) .
+	ActualParameters = "(" [ ExpList ] ")" .
+
+END Oberon07.
