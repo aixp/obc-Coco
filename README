@@ -1,4 +1,29 @@
-This is Coco/R taken from A2, without changes
+This is Coco/R (http://ssw.jku.at/Coco/) for Oberon
+based on implementation taken from A2 (Coco/R V2.2)
 
-NOTES:
-	*.Mod got files from A2 distribution, not from original Coco.Cod
+usage:
+	echo '*' > par
+	./CocoCompile file.ATG
+
+linesep notes:
+	generated code:
+		Texts.WriteLn always emit CR
+		CRA.GenLiterals: CHR(13)
+	input ATG:
+		CR.ATG: eol token
+		Scanner.FRM: EOL (line counter)
+	CRX.EOL: 0DX
+
+modifications:
+	CRA.GenComment.GenBody: "ch = r.eot" -> "ch = EOF"
+	CR.ATG: SHORT inserted in 2 places in SimSet production
+	CR.ATG.FixString: "literal tokens must not contain blanks" semantic check inserted
+	input ATG linesep related:
+		CR.ATG: eol -> lf, cr
+		Scanner.FRM: "EOL = 0DX" -> "EOL = 0AX"
+	unused:
+		CRT: unused import of SYSTEM removed
+		Scanner.FRM: unised import of SYSTEM commented
+		CR.ATG: name variable commented in SetDDT (it not used)
+		CR.ATG: "gn: CRT.GraphNode" commented in CR production (it not used)
+		CR.ATG: c variable commented in Factor production (it not used)

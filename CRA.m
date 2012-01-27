@@ -704,7 +704,7 @@ PROCEDURE GenComment(com:Comment);
 				PutS("          END;$");
 			END;
 			END;
-		PutS("        ELSIF ch = r.eot THEN RETURN FALSE$");	(* changed by r.laich;  *)
+		PutS("        ELSIF ch = EOF THEN RETURN FALSE$");	(* changed by r.laich; changed by A. V. Shiryaev *)
 		PutS("        ELSE NextCh END;$");
 		PutS("      END;$");
 		END GenBody;

@@ -1,6 +1,12 @@
+# This is BSD Makefile
+#    BSD       GNU
+# ${.TARGET}    $@
+# ${.ALLSRC}    $^
+# ${.IMPSRC}    $<
+
 .SUFFIXES: .Mod .m .k
 
-all: ${SRCS1} CocoCompile
+all: CocoCompile
 
 CocoCompile: OFiles.k Reals.k Display.k Texts.k Sets.k Oberon.k CRS.k CRT.k CRA.k CRX.k CRP.k Coco.k CocoCompile.k
 	obc -o ${.TARGET} ${.ALLSRC}
@@ -38,4 +44,4 @@ Sets.k: Texts.k
 	obc -c ${.IMPSRC}
 
 clean:
-	rm -f *.k Oberon.CRS.m Oberon.CRX.m Oberon.Coco.m CocoCompile *.tmp
+	rm -f *.k CocoCompile *.tmp

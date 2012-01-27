@@ -1,6 +1,6 @@
 MODULE CRT; (** portable *)	(* Cocol-R Tables *)
 
-IMPORT SYSTEM (* force native compilation *), Texts, Oberon, Sets;
+IMPORT Texts, Oberon, Sets;
 
 CONST
 	maxSymbols* = 300;	(*max nr of t, nt, and pragmas*)
