@@ -6,24 +6,24 @@
 
 .SUFFIXES: .Mod .m .k
 
-all: ACompile
+all: Oberon07Compile
 
 ###
 
-ACompile: OFiles.k Reals.k Display.k Texts.k Oberon.k AS.k AP.k ACompile.k
+Oberon07Compile: OFiles.k Reals.k Display.k Texts.k Oberon.k Oberon07S.k Oberon07P.k Oberon07Compile.k
 	obc -j0 -o ${.TARGET} ${.ALLSRC}
 
-ACompile.k: AS.k AP.k Texts.k Oberon.k
+Oberon07Compile.k: Oberon07S.k Oberon07P.k Texts.k Oberon.k
 
-AP.k: AS.k
+Oberon07P.k: Oberon07S.k
 
-AP.Mod: A.ATG
+Oberon07P.Mod: Oberon07.ATG
 	./CocoCompile ${.ALLSRC}
 
-AS.Mod: A.ATG
+Oberon07S.Mod: Oberon07.ATG
 	./CocoCompile ${.ALLSRC}
 
-ACompile.Mod: A.ATG
+Oberon07Compile.Mod: Oberon07.ATG
 	./CocoCompile ${.ALLSRC}
 
 ###
@@ -41,4 +41,4 @@ Texts.k: OFiles.k Reals.k Display.k
 	obc -c ${.IMPSRC}
 
 clean:
-	rm -f *.k *.tmp AP* AS* ACompile* *.core
+	rm -f *.k *.tmp Oberon07S* Oberon07P* Oberon07Compile* *.core
