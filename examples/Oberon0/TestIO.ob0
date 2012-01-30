@@ -1,0 +1,7 @@
+MODULE TestIO;
+	CONST data = -56; ctrl = -52;
+	VAR m: INTEGER;
+BEGIN GET(data, m);
+	WHILE ~BIT(ctrl, 0) DO PUT(data, m); GET(data, m) END;
+	PUT(ctrl, 0)
+END TestIO.
