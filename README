@@ -1,4 +1,4 @@
-This is Coco/R (http://ssw.jku.at/Coco/)
+This is Coco/R (http://ssw.jku.at/Coco/) for Oberon
 based on implementation taken from A2 (Coco/R V2.2)
 modifications based on current C# version (Apr 19, 2011)
 
@@ -69,6 +69,8 @@ NOTES:
 		la.val		S.GetName(S.nextPos, S.nextLen, nextName)
 		t.kind		???												rarely used? may be easy implemented in Parser.FRM?
 		t.val		S.GetName(S.pos, S.len, name)					often used
+
+	it is possible to write: (. IF ... THEN .) ... (. END .) :)
 
 TODO:
 	do Coco regression tests
