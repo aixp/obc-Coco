@@ -8,7 +8,7 @@ usage:
 
 linesep notes:
 	generated code:
-		Texts.WriteLn always emit CR
+		Texts.WriteLn always emits CR
 		CRA.GenLiterals: CHR(13)
 	input ATG:
 		CR.ATG: eol token
@@ -43,7 +43,7 @@ modifications done:
 		Scanner.FRM: "EOL = 0DX" -> "EOL = 0AX"
 	unused:
 		CRT: unused import of SYSTEM removed
-		Scanner.FRM: unised import of SYSTEM commented
+		Scanner.FRM: unused import of SYSTEM commented
 		CR.ATG: name variable commented in SetDDT (it not used)
 		CR.ATG: "gn: CRT.GraphNode" commented in CR production (it not used)
 		CR.ATG: c variable commented in Factor production (it not used)
