@@ -1,10 +1,10 @@
 COMPILER Oberon07
 
 (*
-	Alexander Shiryaev, 2012.01
+	Alexander Shiryaev, 2012.01, 2013.11
 
 	References:
-		N. Wirth, Oberon07.Report.pdf, Revision 22.9.2011
+		N. Wirth, Oberon07.Report.pdf, Revision 1.10.2013
 		LL(1) conflict-less Oberon-2.atg from Coco Contributions/Java/
 	Extensions:
 		leaf procedures
