@@ -12,83 +12,83 @@ Usage
 Modifications done
 ==================
 
-	- most important:
+- most important:
 
-		- IF (LL(1)-resolver):
+	- IF (LL(1)-resolver):
 
-			- CR.ATG: Resolver introduced (based on C# Coco.atg); Coco.Error updated
+		- CR.ATG: Resolver introduced (based on C# Coco.atg); Coco.Error updated
 
-			- CRT: Resolver introduced (based on C# Tab.cs)
+		- CRT: Resolver introduced (based on C# Tab.cs)
 
-			- CRX: Resolver introduced (based on C# ParserGen.cs)
+		- CRX: Resolver introduced (based on C# ParserGen.cs)
 
-				TODO?:
+			TODO?:
 
-					- what is correct 2nd arg of GenCond in case of CRT.opt in GenCode ?
+				- what is correct 2nd arg of GenCond in case of CRT.opt in GenCode ?
 
-					- CRT.any case in GenCode: implementation differs from C# version
+				- CRT.any case in GenCode: implementation differs from C# version
 
-		- CRT.LL1Test: LL1Error(4) added, based on C# Tab.cs CheckLL1(); DelSubGraph() introduced
+	- CRT.LL1Test: LL1Error(4) added, based on C# Tab.cs CheckLL1(); DelSubGraph() introduced
 
-		- literals:
+	- literals:
 
-			- CRX: new procedure: GenTokens
+		- CRX: new procedure: GenTokens
 
-			- CR.ATG: modified
+		- CR.ATG: modified
 
-			- CRDriver.FRM: semantic error 27 introduced ("token string declared twice")
+		- CRDriver.FRM: semantic error 27 introduced ("token string declared twice")
 
-			- CRDriver.FRM: semantic error 28 introduced ("undefined string in production")
+		- CRDriver.FRM: semantic error 28 introduced ("undefined string in production")
 
-			- CRT: new procedures: NewLit, FindLit
+		- CRT: new procedures: NewLit, FindLit
 
-		- Driver generation:
+	- Driver generation:
 
-			- CRX.GenCompiler: modified
+		- CRX.GenCompiler: modified
 
-			- Driver.FRM: created
+		- Driver.FRM: created
 
-			- Coco.Mod renamed to CRDriver.FRM and modified
+		- Coco.Mod renamed to CRDriver.FRM and modified
 
-		- CR.ATG.FixString: "literal tokens must not contain blanks" semantic check inserted
+	- CR.ATG.FixString: "literal tokens must not contain blanks" semantic check inserted
 
-	- CRA.GenComment.GenBody: "ch = r.eot" -> "ch = EOF"
+- CRA.GenComment.GenBody: "ch = r.eot" -> "ch = EOF"
 
-	- CR.ATG: SHORT inserted in 2 places in SimSet production
+- CR.ATG: SHORT inserted in 2 places in SimSet production
 
-	- input ATG linesep related:
+- input ATG linesep related:
 
-		- CR.ATG: eol -> lf, cr
+	- CR.ATG: eol -> lf, cr
 
-		- Scanner.FRM: "EOL = 0DX" -> "EOL = 0AX"
+	- Scanner.FRM: "EOL = 0DX" -> "EOL = 0AX"
 
-	- unused:
+- unused:
 
-		- CRT: unused import of SYSTEM removed
+	- CRT: unused import of SYSTEM removed
 
-		- Scanner.FRM: unused import of SYSTEM commented
+	- Scanner.FRM: unused import of SYSTEM commented
 
-		- CR.ATG: name variable commented in SetDDT (it not used)
+	- CR.ATG: name variable commented in SetDDT (it not used)
 
-		- CR.ATG: "gn: CRT.GraphNode" commented in CR production (it not used)
+	- CR.ATG: "gn: CRT.GraphNode" commented in CR production (it not used)
 
-		- CR.ATG: c variable commented in Factor production (it not used)
+	- CR.ATG: c variable commented in Factor production (it not used)
 
-	- optimizations:
+- optimizations:
 
-		- CRT.Length: s -> CONST s
+	- CRT.Length: s -> CONST s
 
-		- CRA.Length: s -> CONST s
+	- CRA.Length: s -> CONST s
 
-		- CRX.Length: s -> CONST s
+	- CRX.Length: s -> CONST s
 
-	- typos:
+- typos:
 
-		- spaces:
+	- spaces:
 
-			- Scanner.FRM: extra space removed in first line "(*  scanner module..."
+		- Scanner.FRM: extra space removed in first line "(*  scanner module..."
 
-			- redundant spaces removed in some places
+		- redundant spaces removed in some places
 
 Features candidates
 ===================
@@ -104,23 +104,23 @@ Features candidates
 Notes
 =====
 
-	- line separators:
+- line separators:
 
-		- generated code:
+	- generated code:
 
-			Texts.WriteLn always emits CR
+		Texts.WriteLn always emits CR
 
-			CRA.GenLiterals: CHR(13)
+		CRA.GenLiterals: CHR(13)
 
-		- input ATG:
+	- input ATG:
 
-			CR.ATG: eol token
+		CR.ATG: eol token
 
-			Scanner.FRM: EOL (line counter)
+		Scanner.FRM: EOL (line counter)
 
-		- CRX.EOL: 0DX
+	- CRX.EOL: 0DX
 
-	- lookahead-related:
+- lookahead-related:
 
 	+-------+-----------------------------------------+---------------------------------------------------+
 	|new    |old                                      |comment                                            |
@@ -134,19 +134,19 @@ Notes
 	|t.val  |S.GetName(S.pos, S.len, name)            |often used                                         |
 	+-------+-----------------------------------------+---------------------------------------------------+
 
-	- it is possible to write: (. IF ... THEN .) ... (. END .) :)
+- it is possible to write: (. IF ... THEN .) ... (. END .) :)
 
 TODO
 ====
 
-	- do Coco regression tests
+- do Coco regression tests
 
-		TestResOK (EOF related)
+	TestResOK (EOF related)
 
-	- number of reported errors does not correspond to number of displayed errors
+- number of reported errors does not correspond to number of displayed errors
 
-	- trace:
+- trace:
 
-		does not work now
+	does not work now
 
-		literals
+	literals
