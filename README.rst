@@ -104,15 +104,15 @@ Features candidates
 Notes
 =====
 
-- line separators
+- line separators:
 
-	- generated code
+	- generated code:
 
 		Texts.WriteLn always emits CR
 
 		CRA.GenLiterals: CHR(13)
 
-	- input ATG
+	- input ATG:
 
 		CR.ATG: eol token
 
@@ -120,7 +120,7 @@ Notes
 
 	- CRX.EOL: 0DX
 
-- lookahead-related
+- lookahead-related:
 
 	+-------+-----------------------------------------+---------------------------------------------------+
 	|new    |old                                      |comment                                            |
