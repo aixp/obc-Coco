@@ -1,6 +1,8 @@
 This is Coco/R (http://ssw.jku.at/Coco/) for Oberon
-based on implementation taken from A2 (Coco/R V2.2)
-modifications based on current C# version (Apr 19, 2011)
+
+Based on implementation taken from A2 (Coco/R V2.2)
+
+Modifications based on current C# version (Apr 19, 2011)
 
 Usage
 =====
